@@ -1,20 +1,30 @@
-# Google ML Kit Text Recognition - Keep all text recognizer classes
-# These classes are referenced by the plugin but may be removed by R8 during minification
+# Google ML Kit Text Recognition - ProGuard/R8 Rules
+# Suppress errors about missing language-specific text recognizer classes
+# These are optional modules that may not be included in the build
 
-# Keep Chinese text recognizer classes
--keep class com.google.mlkit.vision.text.chinese.** { *; }
+# Ignore all warnings (including missing class warnings)
+-ignorewarnings
 
-# Keep Devanagari text recognizer classes
--keep class com.google.mlkit.vision.text.devanagari.** { *; }
+# IMPORTANT: Put -dontwarn rules to suppress missing class errors
+# Suppress warnings for missing language-specific recognizer classes
+-dontwarn com.google.mlkit.vision.text.chinese.**
+-dontwarn com.google.mlkit.vision.text.devanagari.**
+-dontwarn com.google.mlkit.vision.text.japanese.**
+-dontwarn com.google.mlkit.vision.text.korean.**
 
-# Keep Japanese text recognizer classes
--keep class com.google.mlkit.vision.text.japanese.** { *; }
+# Suppress warnings for inner classes (Builder classes)
+-dontwarn com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions$Builder
+-dontwarn com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+-dontwarn com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions$Builder
+-dontwarn com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
+-dontwarn com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions$Builder
+-dontwarn com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
+-dontwarn com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions$Builder
+-dontwarn com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 
-# Keep Korean text recognizer classes
--keep class com.google.mlkit.vision.text.korean.** { *; }
-
-# Keep all ML Kit text recognition classes
+# Keep all ML Kit text recognition classes that are actually used
 -keep class com.google.mlkit.vision.text.** { *; }
+-keep class com.google.mlkit.vision.text.**$* { *; }
 
 # Keep Google ML Kit common classes
 -keep class com.google.mlkit.common.** { *; }
@@ -22,3 +32,5 @@
 # Keep Google ML Kit vision classes
 -keep class com.google.mlkit.vision.** { *; }
 
+# Keep the plugin classes
+-keep class com.google_mlkit_text_recognition.** { *; }
