@@ -142,7 +142,7 @@ class TTSService {
   List<String> _splitTextWithPunctuation(String text) {
     final chunks = <String>[];
     final buffer = StringBuffer();
-    
+
     for (int i = 0; i < text.length; i++) {
       final char = text[i];
       buffer.write(char);
@@ -150,9 +150,12 @@ class TTSService {
       // Check for sentence-ending punctuation (period, question mark, exclamation)
       if (char == '.' || char == '?' || char == '!') {
         // Check if it's not part of a decimal number or abbreviation
-        if (i == text.length - 1 || 
-            (i < text.length - 1 && text[i + 1].trim().isNotEmpty && 
-             !text[i + 1].trim().toLowerCase().startsWith(RegExp(r'[a-z]')))) {
+        if (i == text.length - 1 ||
+            (i < text.length - 1 &&
+                text[i + 1].trim().isNotEmpty &&
+                !text[i + 1].trim().toLowerCase().startsWith(
+                  RegExp(r'[a-z]'),
+                ))) {
           chunks.add(buffer.toString());
           buffer.clear();
         }

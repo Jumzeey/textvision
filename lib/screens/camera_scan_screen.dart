@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import '../services/camera_service.dart';
-import '../services/tts_service.dart';
-import '../services/text_processing_service.dart';
-import '../services/google_cloud_vision_service.dart';
+import '../services/hybrid_tts_service.dart';
+import '../services/question_parser_service.dart';
+import '../services/ocr_service.dart';
 
 /// Camera scan screen for capturing exam paper images
 ///
@@ -27,21 +27,21 @@ class CameraScanScreen extends StatefulWidget {
 
 class _CameraScanScreenState extends State<CameraScanScreen> {
   final CameraService _cameraService = CameraService();
-  late final GoogleCloudVisionService _visionService;
-  final TTSService _ttsService = TTSService();
-  final TextProcessingService _textProcessor = TextProcessingService();
+  late final OCRService _ocrService;
+  final HybridTTSService _ttsService = HybridTTSService();
+  final QuestionParserService _questionParser = QuestionParserService();
   CameraController? _controller;
   bool _isInitialized = false;
   String? _errorMessage;
   final List<String> _collectedTextBlocks =
       []; // Store full text blocks from each scan
-  final List<Uint8List> _capturedImages =
-      []; // Store captured images for batch processing
+  final List<XFile> _capturedImageFiles =
+      []; // Store captured image files for processing
   bool _isCapturingImages = false; // Track if capturing images
   bool _isReading = false; // Track if currently reading text
   bool _isProcessing = false; // Track if processing OCR results
   String _currentStatus = 'Initializing camera...';
-  List<String> _questions = []; // Store detected questions
+  List<Question> _parsedQuestions = []; // Store parsed questions with options
   int _currentQuestionIndex =
       -1; // Current question being read (-1 means not started)
 
@@ -54,8 +54,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   /// Initialize all services
   Future<void> _initializeServices() async {
     try {
-      // Initialize Google Cloud Vision service
-      _visionService = GoogleCloudVisionService();
+      // Initialize offline OCR service (Google ML Kit - works completely offline)
+      _ocrService = OCRService();
       await _ttsService.initialize();
       await _initializeCamera();
     } catch (e) {
@@ -100,9 +100,9 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
 
     setState(() {
       _isCapturingImages = true;
-      _capturedImages.clear();
+      _capturedImageFiles.clear();
       _collectedTextBlocks.clear();
-      _questions.clear();
+      _parsedQuestions.clear();
       _currentQuestionIndex = -1;
       _currentStatus = 'Capturing images... Position paper and tap when ready.';
     });
@@ -118,10 +118,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         });
       }
       final imageFile1 = await _controller!.takePicture();
-      final imageBytes1 = await imageFile1.readAsBytes();
-      if (imageBytes1.isNotEmpty) {
-        _capturedImages.add(imageBytes1);
-      }
+      _capturedImageFiles.add(imageFile1);
 
       // Small delay between captures
       await Future.delayed(const Duration(milliseconds: 500));
@@ -133,10 +130,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         });
       }
       final imageFile2 = await _controller!.takePicture();
-      final imageBytes2 = await imageFile2.readAsBytes();
-      if (imageBytes2.isNotEmpty) {
-        _capturedImages.add(imageBytes2);
-      }
+      _capturedImageFiles.add(imageFile2);
 
       // Provide haptic feedback when done
       HapticFeedback.mediumImpact();
@@ -144,7 +138,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       if (mounted) {
         setState(() {
           _currentStatus =
-              'Captured ${_capturedImages.length} images. Processing...';
+              'Captured ${_capturedImageFiles.length} images. Processing...';
         });
       }
 
@@ -162,7 +156,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
 
   /// Process captured images and detect questions
   Future<void> _processImagesAndDetectQuestions() async {
-    if (_capturedImages.isEmpty) {
+    if (_capturedImageFiles.isEmpty) {
       if (mounted) {
         setState(() {
           _isCapturingImages = false;
@@ -172,33 +166,29 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       return;
     }
 
-    // Process all captured images with Google Cloud Vision API
+    // Process all captured images with offline OCR (Google ML Kit)
     if (mounted) {
       setState(() {
         _isProcessing = true;
         _currentStatus =
-            'Processing ${_capturedImages.length} images with Google Cloud Vision...';
+            'Processing ${_capturedImageFiles.length} images with offline OCR...';
       });
     }
 
     try {
-      // Process images in batch for efficiency
-      final visionResponses = await _visionService.detectTextBatch(
-        _capturedImages,
-      );
+      // Process each image using offline OCR
+      for (final imageFile in _capturedImageFiles) {
+        final recognizedText = await _ocrService.recognizeText(imageFile.path);
 
-      // Extract text from all responses
-      for (final response in visionResponses) {
-        if (response.hasText) {
-          final text = _visionService.extractPlainText(response);
-          if (text.trim().isNotEmpty) {
-            _collectedTextBlocks.add(text);
-          }
+        // Extract text from recognized result
+        final text = _ocrService.extractPlainText(recognizedText);
+        if (text.trim().isNotEmpty) {
+          _collectedTextBlocks.add(text);
         }
       }
 
-      // Merge and organize text
-      final mergedText = _textProcessor.mergeTextBlocks(_collectedTextBlocks);
+      // Merge text blocks
+      final mergedText = _collectedTextBlocks.join('\n\n');
       if (mergedText.trim().isEmpty) {
         if (mounted) {
           setState(() {
@@ -211,34 +201,27 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         return;
       }
 
-      // Process text and detect questions
-      final processedText = await _textProcessor.processTextForReading(
-        mergedText,
-      );
-
-      // Split text into questions
-      _questions = _detectQuestions(processedText);
+      // Parse questions and options from OCR text
+      _parsedQuestions = _questionParser.parseQuestions(mergedText);
 
       if (mounted) {
         setState(() {
           _isProcessing = false;
           _isCapturingImages = false;
-          if (_questions.isEmpty) {
+          if (_parsedQuestions.isEmpty) {
             _currentStatus =
-                'No questions detected. Text will be read as a whole.';
-            // If no questions detected, treat entire text as one question
-            _questions = [processedText];
+                'No questions detected. Try scanning again with better lighting.';
           } else {
             _currentStatus =
-                'Found ${_questions.length} questions. Ready to read.';
+                'Found ${_parsedQuestions.length} questions. Ready to read.';
           }
         });
       }
 
       // Announce to user with proper pauses
-      if (_questions.isNotEmpty) {
+      if (_parsedQuestions.isNotEmpty) {
         await _ttsService.speak(
-          'Found ${_questions.length} questions. Starting with question 1.',
+          'Found ${_parsedQuestions.length} questions. Starting with question 1.',
           pauseAtPunctuation: true,
         );
         await Future.delayed(const Duration(milliseconds: 800));
@@ -255,9 +238,9 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     }
   }
 
-  /// Detect questions in text
-  /// Looks for numbered questions (Arabic, Roman numerals), question marks, and common question patterns
-  /// Intelligently determines when a question ends and a new one begins
+  // Old question detection methods - replaced by QuestionParserService
+  // Commented out but kept for reference
+  /*
   List<String> _detectQuestions(String text) {
     if (text.trim().isEmpty) return [];
 
@@ -436,8 +419,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
 
     final lowerText = text.toLowerCase().trim();
     for (final word in questionWords) {
-      if (lowerText.startsWith('$word ') ||
-          lowerText.startsWith('$word?')) {
+      if (lowerText.startsWith('$word ') || lowerText.startsWith('$word?')) {
         return true;
       }
     }
@@ -500,14 +482,15 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     // Default: return most of the content (80%) to avoid cutting off mid-sentence
     return (content.length * 0.8).round();
   }
+  */
 
   /// Read the current question
   Future<void> _readCurrentQuestion() async {
-    if (_questions.isEmpty || _currentQuestionIndex < 0) {
+    if (_parsedQuestions.isEmpty || _currentQuestionIndex < 0) {
       _currentQuestionIndex = 0;
     }
 
-    if (_currentQuestionIndex >= _questions.length) {
+    if (_currentQuestionIndex >= _parsedQuestions.length) {
       // All questions read
       if (mounted) {
         setState(() {
@@ -522,58 +505,61 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     setState(() {
       _isReading = true;
       _currentStatus =
-          'Reading question ${_currentQuestionIndex + 1} of ${_questions.length}';
+          'Reading question ${_currentQuestionIndex + 1} of ${_parsedQuestions.length}';
     });
 
-    final question = _questions[_currentQuestionIndex];
-    final questionNumber = _currentQuestionIndex + 1;
+    final question = _parsedQuestions[_currentQuestionIndex];
 
-    // Announce question number with pause
-    await _ttsService.speak(
-      'Question $questionNumber.',
-      pauseAtPunctuation: true,
-    );
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Format question for natural TTS reading
+    final formattedText = _questionParser.formatForTTS(question);
 
-    // Read the question with proper pauses at punctuation
-    await _ttsService.speak(question, pauseAtPunctuation: true);
+    // Read the formatted question with proper pauses
+    await _ttsService.speak(formattedText, pauseAtPunctuation: true);
 
-    // Wait for speech to complete
+    // Wait for speech to complete - use longer timeout and more reliable check
     int waitCount = 0;
-    while (_ttsService.isSpeaking && waitCount < 200) {
+    const maxWaitTime = 600; // 60 seconds max (600 * 100ms)
+
+    while (_ttsService.isSpeaking && waitCount < maxWaitTime) {
       await Future.delayed(const Duration(milliseconds: 100));
       waitCount++;
+
+      // Double-check if still speaking every 10 checks
+      if (waitCount % 10 == 0 && !_ttsService.isSpeaking) {
+        break;
+      }
     }
+
+    // Additional safety delay to ensure speech completes
+    await Future.delayed(const Duration(milliseconds: 300));
 
     if (mounted) {
       setState(() {
         _isReading = false;
         _currentStatus =
-            'Question ${_currentQuestionIndex + 1} of ${_questions.length} read. Use buttons to navigate.';
+            'Question ${_currentQuestionIndex + 1} of ${_parsedQuestions.length} read. Use buttons to navigate.';
       });
     }
   }
 
   /// Re-read current question
   Future<void> _rereadCurrentQuestion() async {
-    if (_questions.isEmpty) return;
+    if (_parsedQuestions.isEmpty) return;
     await _readCurrentQuestion();
   }
 
   /// Pause or resume reading
   Future<void> _pauseOrResumeReading() async {
-    if (_ttsService.isSpeaking && !_ttsService.isPaused) {
+    if (_ttsService.isSpeaking) {
       // Pause reading
       await _ttsService.pause();
       if (mounted) {
         setState(() {
-          _currentStatus =
-              'Reading paused. Tap "Resume" to continue or "Re-read" to start over.';
+          _currentStatus = 'Reading paused. Tap "Re-read" to start over.';
         });
       }
-    } else if (_ttsService.isPaused) {
-      // Resume by re-reading the current question from the beginning
-      // (since TTS resume may not work on all platforms)
+    } else {
+      // Re-read the current question from the beginning
       await _ttsService.stop();
       if (mounted) {
         setState(() {
@@ -588,7 +574,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   /// Build control buttons based on current state
   Widget _buildControlButtons() {
     // Show question controls if questions are detected
-    if (_questions.isNotEmpty && !_isProcessing && !_isCapturingImages) {
+    if (_parsedQuestions.isNotEmpty && !_isProcessing && !_isCapturingImages) {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -715,6 +701,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   void dispose() {
     _stopAndReset();
     _cameraService.dispose();
+    _ocrService.dispose();
     super.dispose();
   }
 
@@ -802,7 +789,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
-                if (_questions.isEmpty)
+                if (_parsedQuestions.isEmpty)
                   Text(
                     widget.isHandwriting
                         ? 'Position handwritten text within the frame. Tap "Capture 2 Images" to scan.'
@@ -812,7 +799,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                   )
                 else
                   Text(
-                    'Question ${_currentQuestionIndex + 1} of ${_questions.length}',
+                    'Question ${_currentQuestionIndex + 1} of ${_parsedQuestions.length}',
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 12,

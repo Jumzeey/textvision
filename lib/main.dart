@@ -7,13 +7,15 @@ import 'screens/home_screen.dart';
 ///
 /// This app assists blind students during exams by:
 /// - Scanning exam papers using the device camera
-/// - Extracting both printed and handwritten text using Google Cloud Vision API
+/// - Extracting both printed and handwritten text using offline OCR (Google ML Kit)
 /// - Reading the recognized text aloud using text-to-speech
 /// - Providing full accessibility features for screen readers
+/// - Works completely offline - no internet connection required
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables from .env file
+  // Load environment variables from .env file (if needed for future features)
+  // Note: No longer required for OCR as we use offline Google ML Kit
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
