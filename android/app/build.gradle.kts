@@ -36,8 +36,8 @@ android {
         signingConfig = signingConfigs.getByName("debug")
 
         // Enable R8
-        minifyEnabled true
-        shrinkResources true
+        isMinifyEnabled = true
+        isShrinkResources = true
 
         // Use ProGuard rules
         proguardFiles(
