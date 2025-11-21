@@ -94,11 +94,11 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  assets:
-    - .env
-    # Kokoro TTS model files (download from Kokoro TTS repository)
-    # - assets/kokoro-v1.0.onnx
-    # - assets/voices-v1.0.bin
+  # assets:
+  #   - .env  # Removed - no longer needed since we use offline OCR
+  #   # Kokoro TTS model files (download from Kokoro TTS repository)
+  #   # - assets/kokoro-v1.0.onnx
+  #   # - assets/voices-v1.0.bin
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
