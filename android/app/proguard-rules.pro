@@ -13,6 +13,7 @@
 -dontwarn com.google.mlkit.vision.text.korean.**
 
 # Suppress warnings for inner classes (Builder classes)
+-dontwarn com.google.mlkit.**
 -dontwarn com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions$Builder
 -dontwarn com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 -dontwarn com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions$Builder
@@ -23,6 +24,7 @@
 -dontwarn com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 
 # Keep all ML Kit text recognition classes that are actually used
+-keep class com.google.mlkit.** { *; }
 -keep class com.google.mlkit.vision.text.** { *; }
 -keep class com.google.mlkit.vision.text.**$* { *; }
 

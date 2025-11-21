@@ -31,17 +31,22 @@ android {
     }
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
-            // ProGuard rules for Google ML Kit Text Recognition
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
+    release {
+        // Use debug keys temporarily
+        signingConfig = signingConfigs.getByName("debug")
+
+        // Enable R8
+        minifyEnabled true
+        shrinkResources true
+
+        // Use ProGuard rules
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro"
+        )
     }
+}
+
 }
 
 flutter {
