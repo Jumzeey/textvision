@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'screens/home_screen.dart';
+import 'package:flutter/foundation.dart';
+import 'screens/camera_scan_screen.dart';
+// ignore: unused_import
+import 'services/hybrid_tts_service.dart'; // Available for HybridTTSService.disable() if needed
 
 /// Main entry point for the TextVision app
 ///
-/// This app assists blind students during exams by:
-/// - Scanning exam papers using the device camera
+/// This app assists blind users by:
+/// - Scanning documents and papers using the device camera
 /// - Extracting both printed and handwritten text using offline OCR (Google ML Kit)
 /// - Reading the recognized text aloud using text-to-speech
 /// - Providing full accessibility features for screen readers
@@ -14,12 +17,21 @@ import 'screens/home_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // TEMPORARY: Disable TTS if it's causing crashes
+  // Set to false to enable TTS again once the native library issue is resolved
+  if (kDebugMode) {
+    // Uncomment the next line to completely disable TTS during development
+    // HybridTTSService.disable();
+  }
+
   // Load environment variables from .env file (if needed for future features)
   // Note: No longer required for OCR as we use offline Google ML Kit
+  // Silently attempt to load .env file - no warning if it doesn't exist
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
-    debugPrint('Warning: Could not load .env file: $e');
+    // Silently ignore - .env file is optional
+    // Only used for future features that might need API keys
   }
 
   // Set preferred orientations to support both portrait and landscape
@@ -43,7 +55,7 @@ class TextVisionApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TextVision - Exam Assistant',
+      title: 'TextVision - Document Reader',
       debugShowCheckedModeBanner: false,
 
       // Theme configuration optimized for accessibility
@@ -107,8 +119,8 @@ class TextVisionApp extends StatelessWidget {
         ),
       ),
 
-      // Start with the home screen
-      home: const HomeScreen(),
+      // Start directly with the camera scan screen (auto-detects printed/handwritten)
+      home: const CameraScanScreen(),
 
       // Enable semantic labels for screen readers
       builder: (context, child) {

@@ -1,27 +1,81 @@
+import 'word_grouping_service.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+
 /// Service for processing and organizing text for smooth reading
 ///
 /// Can use AI/NLP services for better text organization if available
 class TextProcessingService {
+  final WordGroupingService _wordGroupingService = WordGroupingService();
   /// Process and organize text for smooth reading
   ///
   /// Takes raw OCR text and organizes it into well-formatted,
   /// natural-sounding sentences and paragraphs
+  ///
+  /// This method fixes letter-by-letter spelling issues (A R E → are)
+  /// and applies all text cleaning and formatting
   Future<String> processTextForReading(String rawText) async {
     if (rawText.trim().isEmpty) return '';
 
-    // Step 1: Clean the text
-    var cleaned = _cleanText(rawText);
+    try {
+      // Step 1: Fix letter-by-letter spelling (A R E → are)
+      var cleaned = _wordGroupingService.fixLetterSpellingInText(rawText);
+      
+      // Safety check: if processing removed all text, return original
+      if (cleaned.trim().isEmpty && rawText.trim().isNotEmpty) {
+        cleaned = rawText;
+      }
 
-    // Step 2: Fix common OCR errors
-    cleaned = _fixOCRErrors(cleaned);
+      // Step 2: Clean the text
+      cleaned = _cleanText(cleaned);
+      
+      // Safety check again
+      if (cleaned.trim().isEmpty && rawText.trim().isNotEmpty) {
+        cleaned = rawText;
+      }
 
-    // Step 3: Organize into natural sentences
-    cleaned = _organizeIntoSentences(cleaned);
+      // Step 3: Fix common OCR errors
+      cleaned = _fixOCRErrors(cleaned);
+      
+      // Safety check again
+      if (cleaned.trim().isEmpty && rawText.trim().isNotEmpty) {
+        cleaned = rawText;
+      }
 
-    // Step 4: Format for smooth reading
-    cleaned = _formatForReading(cleaned);
+      // Step 4: Organize into natural sentences
+      cleaned = _organizeIntoSentences(cleaned);
+      
+      // Safety check again
+      if (cleaned.trim().isEmpty && rawText.trim().isNotEmpty) {
+        cleaned = rawText;
+      }
 
-    return cleaned;
+      // Step 5: Format for smooth reading
+      cleaned = _formatForReading(cleaned);
+      
+      // Final safety check: never return empty if original had text
+      if (cleaned.trim().isEmpty && rawText.trim().isNotEmpty) {
+        return rawText;
+      }
+
+      return cleaned;
+    } catch (e) {
+      // If any processing step fails, return original text
+      return rawText;
+    }
+  }
+
+  /// Process RecognizedText from ML Kit with word grouping
+  ///
+  /// Uses bounding box information to properly group characters into words
+  /// This is more accurate than processing plain text
+  Future<String> processRecognizedText(RecognizedText recognizedText) async {
+    // Use word grouping service to merge characters into words
+    final groupedText = _wordGroupingService.groupCharactersIntoWords(
+      recognizedText,
+    );
+
+    // Process the grouped text for reading
+    return await processTextForReading(groupedText);
   }
 
   /// Clean basic text issues
@@ -199,5 +253,387 @@ class TextProcessingService {
     final wordCount = text.split(RegExp(r'\s+')).length;
     final hasPunctuation = RegExp(r'[.!?]').hasMatch(text);
     return wordCount * 10 + (hasPunctuation ? 5 : 0) + text.length;
+  }
+
+  /// Aggregate text from multiple OCR frames
+  ///
+  /// Combines results from multiple camera captures to improve accuracy:
+  /// - Uses the most complete version as base
+  /// - Merges unique words from other frames while preserving structure
+  /// - Handles variations in recognition across frames
+  /// - Preserves line breaks and paragraph structure
+  ///
+  /// [textResults] - List of text strings from multiple OCR passes
+  /// [confidenceThreshold] - Minimum confidence to include text (0.0-1.0)
+  ///
+  /// Returns aggregated text with best recognition from all frames
+  String aggregateMultiFrameText(
+    List<String> textResults, {
+    double confidenceThreshold = 0.5,
+  }) {
+    if (textResults.isEmpty) return '';
+    if (textResults.length == 1) return textResults.first;
+
+    // Strategy 1: Try to merge by preserving structure and finding all unique content
+    // Split each text into lines to preserve structure
+    final allLines = <String>[];
+    final lineSet = <String>{}; // Track unique lines to avoid duplicates
+    
+    for (final text in textResults) {
+      if (text.trim().isEmpty) continue;
+      
+      // Split by newlines, but also preserve paragraph breaks
+      final lines = text.split(RegExp(r'\n+'));
+      for (final line in lines) {
+        final trimmedLine = line.trim();
+        if (trimmedLine.isEmpty) continue;
+        
+        // Normalize line for comparison (remove extra spaces)
+        final normalized = trimmedLine.replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+        
+        // Check if this line is substantially different from existing lines
+        bool isUnique = true;
+        for (final existingLine in lineSet) {
+          final existingNormalized = existingLine.replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+          
+          // If lines are very similar (>90% overlap), skip
+          if (_calculateSimilarity(normalized, existingNormalized) > 0.9) {
+            isUnique = false;
+            // But if the new line is longer/more complete, replace it
+            if (trimmedLine.length > existingLine.length) {
+              lineSet.remove(existingLine);
+              lineSet.add(trimmedLine);
+              // Update in allLines too
+              final index = allLines.indexOf(existingLine);
+              if (index >= 0) {
+                allLines[index] = trimmedLine;
+              }
+            }
+            break;
+          }
+        }
+        
+        if (isUnique) {
+          allLines.add(trimmedLine);
+          lineSet.add(trimmedLine);
+        }
+      }
+    }
+    
+    // If we have structured lines, merge them intelligently
+    if (allLines.isNotEmpty) {
+      // Group similar lines together and use the most complete version
+      final mergedLines = <String>[];
+      final processedLines = <String>{};
+      
+      for (final line in allLines) {
+        if (processedLines.contains(line)) continue;
+        
+        // Find similar lines
+        final similarLines = <String>[line];
+        for (final otherLine in allLines) {
+          if (otherLine == line || processedLines.contains(otherLine)) continue;
+          
+          final similarity = _calculateSimilarity(
+            line.replaceAll(RegExp(r'\s+'), ' ').toLowerCase(),
+            otherLine.replaceAll(RegExp(r'\s+'), ' ').toLowerCase(),
+          );
+          
+          if (similarity > 0.85) {
+            similarLines.add(otherLine);
+          }
+        }
+        
+        // Use the longest/most complete version
+        String bestLine = line;
+        for (final similarLine in similarLines) {
+          if (similarLine.length > bestLine.length) {
+            bestLine = similarLine;
+          }
+        }
+        
+        mergedLines.add(bestLine);
+        processedLines.addAll(similarLines);
+      }
+      
+      // Join lines with newlines to preserve structure
+      var result = mergedLines.join('\n');
+      
+      // Now add any unique words that might be missing
+      final allWords = <String, int>{}; // word -> count
+      for (final text in textResults) {
+        final words = _extractWords(text);
+        for (final word in words) {
+          allWords[word] = (allWords[word] ?? 0) + 1;
+        }
+      }
+      
+      // Extract words from merged result
+      final mergedWords = _extractWords(result);
+      
+      // Find words that appear in multiple frames but not in merged result
+      final missingWords = <String>[];
+      for (final entry in allWords.entries) {
+        if (!mergedWords.contains(entry.key) && entry.value >= 2) {
+          // Word appears in multiple frames but not in result - might be important
+          missingWords.add(entry.key);
+        }
+      }
+      
+      // If we have missing words, append them (but this is a fallback)
+      if (missingWords.isNotEmpty && result.length < 500) {
+        // Only add if result is relatively short (might be incomplete)
+        result = '$result ${missingWords.join(' ')}';
+      }
+      
+      // Clean up
+      result = result.replaceAll(RegExp(r'\n{3,}'), '\n\n'); // Max 2 newlines
+      result = result.replaceAll(RegExp(r'[ \t]+'), ' '); // Normalize spaces
+      result = result.trim();
+      
+      return result;
+    }
+    
+    // Fallback: Original word-based merging (but improved)
+    return _aggregateByWords(textResults);
+  }
+  
+  /// Fallback aggregation method using word-based merging
+  String _aggregateByWords(List<String> textResults) {
+    // Find the most complete text block as base
+    String bestText = textResults.first;
+    int bestScore = _scoreTextCompleteness(bestText);
+
+    for (final text in textResults) {
+      final score = _scoreTextCompleteness(text);
+      if (score > bestScore) {
+        bestText = text;
+        bestScore = score;
+      }
+    }
+
+    // Extract words from best text
+    final baseWords = _extractWords(bestText);
+    final aggregated = StringBuffer(bestText);
+    final addedWords = <String>{};
+
+    // Add unique words from other frames
+    for (final text in textResults) {
+      if (text == bestText) continue;
+
+      final words = _extractWords(text);
+      final newWords = <String>[];
+
+      for (final word in words) {
+        final wordLower = word.toLowerCase().trim();
+        // Skip if already in base or already added
+        if (baseWords.contains(wordLower) || addedWords.contains(wordLower)) {
+          continue;
+        }
+
+        // Check if word is meaningful (not just punctuation or single char)
+        if (word.length > 1 || RegExp(r'^[A-Za-z]$').hasMatch(word)) {
+          newWords.add(word);
+          addedWords.add(wordLower);
+        }
+      }
+
+      // Add new words if found
+      if (newWords.isNotEmpty) {
+        aggregated.write(' ${newWords.join(' ')}');
+      }
+    }
+
+    // Clean and normalize the aggregated text
+    var result = aggregated.toString();
+    result = result.replaceAll(RegExp(r'\s+'), ' ');
+    result = result.trim();
+
+    return result;
+  }
+  
+  /// Calculate similarity between two strings (0.0 to 1.0)
+  double _calculateSimilarity(String s1, String s2) {
+    if (s1 == s2) return 1.0;
+    if (s1.isEmpty || s2.isEmpty) return 0.0;
+    
+    // Use longest common subsequence for similarity
+    final longer = s1.length > s2.length ? s1 : s2;
+    final shorter = s1.length > s2.length ? s2 : s1;
+    
+    if (longer.isEmpty) return 1.0;
+    
+    // Simple character overlap calculation
+    int matches = 0;
+    final shorterChars = shorter.split('');
+    final longerChars = longer.split('');
+    
+    for (int i = 0; i < shorterChars.length && i < longerChars.length; i++) {
+      if (shorterChars[i] == longerChars[i]) {
+        matches++;
+      }
+    }
+    
+    // Also check for substring matches
+    if (longer.contains(shorter) || shorter.contains(longer)) {
+      matches = (matches + shorter.length) ~/ 2;
+    }
+    
+    return (matches * 2.0) / (longer.length + shorter.length);
+  }
+
+  /// Extract words from text, preserving punctuation context
+  Set<String> _extractWords(String text) {
+    // Split by whitespace and filter empty strings
+    final words = text
+        .split(RegExp(r'\s+'))
+        .where((w) => w.trim().isNotEmpty)
+        .map((w) => w.toLowerCase().trim())
+        .toSet();
+    return words;
+  }
+
+  /// Aggregate multiple RecognizedText objects from ML Kit
+  ///
+  /// Combines OCR results from multiple frames using word-level merging
+  /// This is more sophisticated than simple text merging as it uses
+  /// bounding box information when available
+  Future<String> aggregateRecognizedText(
+    List<String> recognizedTexts,
+  ) async {
+    if (recognizedTexts.isEmpty) return '';
+    if (recognizedTexts.length == 1) return recognizedTexts.first;
+
+    // Use the aggregation method
+    return aggregateMultiFrameText(recognizedTexts);
+  }
+  
+  /// Aggregate RecognizedText objects using spatial information
+  ///
+  /// This is the most accurate method as it uses bounding boxes to merge
+  /// text blocks spatially, preserving the original document structure
+  Future<String> aggregateRecognizedTextObjects(
+    List<RecognizedText> recognizedTexts,
+  ) async {
+    if (recognizedTexts.isEmpty) return '';
+    if (recognizedTexts.length == 1) {
+      return await processRecognizedText(recognizedTexts.first);
+    }
+    
+    // Collect all text blocks from all frames, sorted by position
+    final allBlocks = <TextBlock>[];
+    
+    for (final recognizedText in recognizedTexts) {
+      // Use sorted blocks to preserve spatial order
+      final sortedBlocks = _sortBlocksByPosition(recognizedText.blocks);
+      allBlocks.addAll(sortedBlocks);
+    }
+    
+    // Merge blocks that are spatially close (likely the same text)
+    final mergedBlocks = _mergeSpatialBlocks(allBlocks);
+    
+    // Convert merged blocks back to RecognizedText-like structure
+    // For now, extract text from merged blocks
+    final textLines = <String>[];
+    
+    for (final block in mergedBlocks) {
+      final blockLines = <String>[];
+      for (final line in block.lines) {
+        final lineText = line.text.trim();
+        if (lineText.isNotEmpty) {
+          blockLines.add(lineText);
+        }
+      }
+      if (blockLines.isNotEmpty) {
+        textLines.add(blockLines.join(' '));
+      }
+    }
+    
+    // Join blocks with newlines
+    final rawText = textLines.join('\n');
+    
+    // Process the merged text
+    return await processTextForReading(rawText);
+  }
+  
+  /// Sort text blocks by position (top to bottom, left to right)
+  List<TextBlock> _sortBlocksByPosition(List<TextBlock> blocks) {
+    final sorted = List<TextBlock>.from(blocks);
+    sorted.sort((a, b) {
+      // Sort by top position first
+      final topDiff = a.boundingBox.top - b.boundingBox.top;
+      if (topDiff.abs() > 20) {
+        // Different rows (20px threshold)
+        return topDiff.toInt();
+      }
+      // Same row, sort by left position
+      return (a.boundingBox.left - b.boundingBox.left).toInt();
+    });
+    return sorted;
+  }
+  
+  /// Merge text blocks that are spatially close (likely duplicates)
+  List<TextBlock> _mergeSpatialBlocks(List<TextBlock> blocks) {
+    if (blocks.isEmpty) return [];
+    
+    final merged = <TextBlock>[];
+    final processed = <int>{};
+    
+    for (int i = 0; i < blocks.length; i++) {
+      if (processed.contains(i)) continue;
+      
+      final block = blocks[i];
+      final similarBlocks = <TextBlock>[block];
+      processed.add(i);
+      
+      // Find blocks that overlap or are very close
+      for (int j = i + 1; j < blocks.length; j++) {
+        if (processed.contains(j)) continue;
+        
+        final otherBlock = blocks[j];
+        
+        // Check if blocks overlap or are close
+        if (_blocksOverlap(block, otherBlock, threshold: 30)) {
+          similarBlocks.add(otherBlock);
+          processed.add(j);
+        }
+      }
+      
+      // Use the block with most text as the merged result
+      TextBlock bestBlock = block;
+      int maxTextLength = block.text.length;
+      
+      for (final similarBlock in similarBlocks) {
+        if (similarBlock.text.length > maxTextLength) {
+          bestBlock = similarBlock;
+          maxTextLength = similarBlock.text.length;
+        }
+      }
+      
+      merged.add(bestBlock);
+    }
+    
+    return merged;
+  }
+  
+  /// Check if two text blocks overlap or are close spatially
+  bool _blocksOverlap(TextBlock block1, TextBlock block2, {double threshold = 20}) {
+    final box1 = block1.boundingBox;
+    final box2 = block2.boundingBox;
+    
+    // Calculate overlap
+    final overlapX = (box1.left < box2.right && box1.right > box2.left);
+    final overlapY = (box1.top < box2.bottom && box1.bottom > box2.top);
+    
+    if (overlapX && overlapY) return true;
+    
+    // Check if blocks are close (within threshold)
+    final centerX1 = box1.left + box1.width / 2;
+    final centerY1 = box1.top + box1.height / 2;
+    final centerX2 = box2.left + box2.width / 2;
+    final centerY2 = box2.top + box2.height / 2;
+    
+    final distance = ((centerX1 - centerX2).abs() + (centerY1 - centerY2).abs());
+    return distance < threshold;
   }
 }

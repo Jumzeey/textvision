@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Camera permission for scanning exam papers -->
+    <!-- Camera permission for scanning documents -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Storage permissions for saving transcripts and audio -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />

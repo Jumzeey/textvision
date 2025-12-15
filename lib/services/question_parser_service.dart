@@ -158,10 +158,15 @@ class QuestionParserService {
           
           // Convert $1, $2, etc. to a, b, c, d
           String optionLetter = optionMarker.toLowerCase();
-          if (optionLetter == '1') optionLetter = 'a';
-          else if (optionLetter == '2') optionLetter = 'b';
-          else if (optionLetter == '3') optionLetter = 'c';
-          else if (optionLetter == '4') optionLetter = 'd';
+          if (optionLetter == '1') {
+            optionLetter = 'a';
+          } else if (optionLetter == '2') {
+            optionLetter = 'b';
+          } else if (optionLetter == '3') {
+            optionLetter = 'c';
+          } else if (optionLetter == '4') {
+            optionLetter = 'd';
+          }
           
           if (optionText.isNotEmpty && ['a', 'b', 'c', 'd'].contains(optionLetter)) {
             options.add(_cleanOptionText(optionText));
@@ -216,10 +221,15 @@ class QuestionParserService {
         final optionText = match.group(2)?.trim() ?? '';
         
         // Convert 1,2,3,4 to a,b,c,d
-        if (optionMarker == '1') optionMarker = 'a';
-        else if (optionMarker == '2') optionMarker = 'b';
-        else if (optionMarker == '3') optionMarker = 'c';
-        else if (optionMarker == '4') optionMarker = 'd';
+        if (optionMarker == '1') {
+          optionMarker = 'a';
+        } else if (optionMarker == '2') {
+          optionMarker = 'b';
+        } else if (optionMarker == '3') {
+          optionMarker = 'c';
+        } else if (optionMarker == '4') {
+          optionMarker = 'd';
+        }
         
         if (optionText.isNotEmpty && 
             optionText.length > 2 && 

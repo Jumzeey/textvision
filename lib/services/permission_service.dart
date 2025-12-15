@@ -1,11 +1,12 @@
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 
 /// Service for handling app permissions
 ///
 /// Manages camera, storage, and microphone permissions required for:
-/// - Camera access for scanning exam papers
+/// - Camera access for scanning documents
 /// - Storage access for saving transcripts and audio
 /// - Microphone access for future voice commands
 class PermissionService {
@@ -124,8 +125,9 @@ class PermissionService {
         'granted': status.isGranted,
         'permanentlyDenied': status.isPermanentlyDenied,
       };
-    } catch (e, stackTrace) {
+    } catch (e) {
       // If there's an error, log it and return false
+      debugPrint('Error checking camera permission: $e');
       return {'granted': false, 'permanentlyDenied': false};
     }
   }

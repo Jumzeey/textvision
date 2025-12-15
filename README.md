@@ -1,6 +1,6 @@
-# TextVision - Exam Assistant for Blind Students
+# TextVision - Document Reader for Blind Users
 
-A Flutter mobile application that assists blind students during exams by scanning exam papers and reading both printed and handwritten text aloud using on-device OCR and text-to-speech.
+A Flutter mobile application that assists blind users by scanning documents and papers and reading both printed and handwritten text aloud using on-device OCR and text-to-speech.
 
 ## Features
 
@@ -96,11 +96,11 @@ lib/
 
 ## Usage
 
-### Scanning Exam Papers
+### Scanning Documents
 
-1. **Open the app** and tap "Scan Printed Text" or "Scan Handwriting"
+1. **Open the app** - the camera scanner opens automatically
 2. **Grant camera permission** when prompted
-3. **Position the exam paper** within the scanning guide frame
+3. **Position the document** within the scanning guide frame
 4. **Tap the capture button** to take a photo
 5. **Wait for OCR processing** to complete
 6. **Review the extracted text** on the display screen
@@ -148,7 +148,7 @@ lib/
 
 The app requires the following permissions:
 
-- **Camera**: For scanning exam papers
+- **Camera**: For scanning documents
 - **Storage**: For saving transcripts (Android 12 and below)
 - **Photos**: For saving transcripts (Android 13+)
 - **Microphone**: Optional, for future voice commands

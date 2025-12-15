@@ -67,19 +67,29 @@ class ImagePreprocessingService {
 
     // For handwriting, apply additional enhancements
     if (enhanceForHandwriting) {
-      // Increase contrast more for handwriting
+      // Step 1: Remove paper lines (thick-lined paper)
+      image = _removePaperLines(image);
+
+      // Step 2: Enhance contrast significantly for handwriting
       image = img.adjustColor(
         image,
-        contrast: 1.3,
-        brightness: 0.1,
+        contrast: 1.5, // Higher contrast for handwriting
+        brightness: 0.05,
+        saturation: 0.0, // Ensure grayscale
       );
 
-      // Apply sharpening to make handwriting clearer
+      // Step 3: Apply adaptive thresholding (binarization)
+      image = _applyAdaptiveThreshold(image);
+
+      // Step 4: Apply sharpening to make handwriting clearer
       image = img.convolution(image, filter: [
         0, -1, 0,
         -1, 5, -1,
         0, -1, 0,
       ]);
+
+      // Step 5: Noise reduction
+      image = _reduceNoise(image);
     }
 
     // Apply additional sharpening for better edge detection
@@ -130,16 +140,29 @@ class ImagePreprocessingService {
     );
 
     if (enhanceForHandwriting) {
+      // Step 1: Remove paper lines (thick-lined paper)
+      image = _removePaperLines(image);
+
+      // Step 2: Enhance contrast significantly for handwriting
       image = img.adjustColor(
         image,
-        contrast: 1.3,
-        brightness: 0.1,
+        contrast: 1.5, // Higher contrast for handwriting
+        brightness: 0.05,
+        saturation: 0.0, // Ensure grayscale
       );
+
+      // Step 3: Apply adaptive thresholding (binarization)
+      image = _applyAdaptiveThreshold(image);
+
+      // Step 4: Apply sharpening to make handwriting clearer
       image = img.convolution(image, filter: [
         0, -1, 0,
         -1, 5, -1,
         0, -1, 0,
       ]);
+
+      // Step 5: Noise reduction
+      image = _reduceNoise(image);
     }
 
     image = img.convolution(image, filter: [
@@ -208,6 +231,204 @@ class ImagePreprocessingService {
 
     final rotatedBytes = img.encodeJpg(image, quality: 95);
     return Uint8List.fromList(rotatedBytes);
+  }
+
+  /// Remove paper lines from image (for thick-lined paper)
+  /// 
+  /// Uses horizontal line detection and removal to eliminate
+  /// paper lines that interfere with handwriting recognition
+  img.Image _removePaperLines(img.Image image) {
+    final width = image.width;
+    final height = image.height;
+    final output = img.Image(width: width, height: height);
+
+    // Detect horizontal lines by analyzing horizontal projections
+    final horizontalProjection = List<int>.filled(height, 0);
+
+    // Calculate horizontal projection (sum of pixel values per row)
+    for (int y = 0; y < height; y++) {
+      int sum = 0;
+      for (int x = 0; x < width; x++) {
+        final pixel = image.getPixel(x, y);
+        final luminance = img.getLuminance(pixel);
+        sum += (luminance * 255).toInt();
+      }
+      horizontalProjection[y] = sum;
+    }
+
+    // Find lines (rows with consistently low values)
+    final lineRows = <int>[];
+    for (int y = 1; y < height - 1; y++) {
+      final avg = (horizontalProjection[y - 1] +
+              horizontalProjection[y] +
+              horizontalProjection[y + 1]) /
+          3;
+      // If this row is significantly darker than average, it might be a line
+      if (avg < width * 50) {
+        // Check if neighbors are also dark (line continuity)
+        if (y > 0 &&
+            horizontalProjection[y - 1] < width * 60 &&
+            y < height - 1 &&
+            horizontalProjection[y + 1] < width * 60) {
+          lineRows.add(y);
+        }
+      }
+    }
+
+    // Copy image and remove lines by interpolating from neighbors
+    for (int y = 0; y < height; y++) {
+      if (lineRows.contains(y)) {
+        // This is a line row - interpolate from neighbors
+        for (int x = 0; x < width; x++) {
+          int topY = y - 1;
+          int bottomY = y + 1;
+
+          // Find nearest non-line row above
+          while (topY >= 0 && lineRows.contains(topY)) {
+            topY--;
+          }
+          // Find nearest non-line row below
+          while (bottomY < height && lineRows.contains(bottomY)) {
+            bottomY++;
+          }
+
+          // Interpolate pixel value
+          if (topY >= 0 && bottomY < height) {
+            final topPixel = image.getPixel(x, topY);
+            final bottomPixel = image.getPixel(x, bottomY);
+            // Access RGB channels using pixel properties
+            final topR = topPixel.r.toInt();
+            final topG = topPixel.g.toInt();
+            final topB = topPixel.b.toInt();
+            final bottomR = bottomPixel.r.toInt();
+            final bottomG = bottomPixel.g.toInt();
+            final bottomB = bottomPixel.b.toInt();
+            final avgR = ((topR + bottomR) / 2).round();
+            final avgG = ((topG + bottomG) / 2).round();
+            final avgB = ((topB + bottomB) / 2).round();
+            output.setPixel(x, y, img.ColorRgb8(avgR, avgG, avgB));
+          } else if (topY >= 0) {
+            output.setPixel(x, y, image.getPixel(x, topY));
+          } else if (bottomY < height) {
+            output.setPixel(x, y, image.getPixel(x, bottomY));
+          } else {
+            output.setPixel(x, y, image.getPixel(x, y));
+          }
+        }
+      } else {
+        // Copy pixel as-is
+        for (int x = 0; x < width; x++) {
+          output.setPixel(x, y, image.getPixel(x, y));
+        }
+      }
+    }
+
+    return output;
+  }
+
+  /// Apply adaptive thresholding to binarize the image
+  /// 
+  /// Converts grayscale image to black and white for better OCR
+  img.Image _applyAdaptiveThreshold(img.Image image) {
+    final width = image.width;
+    final height = image.height;
+    final output = img.Image(width: width, height: height);
+
+    // Simple adaptive threshold using local mean
+    final blockSize = 15; // Size of neighborhood
+    final c = 10; // Constant subtracted from mean
+
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        // Calculate local mean
+        int sum = 0;
+        int count = 0;
+
+        for (int dy = -blockSize ~/ 2; dy <= blockSize ~/ 2; dy++) {
+          for (int dx = -blockSize ~/ 2; dx <= blockSize ~/ 2; dx++) {
+            final nx = (x + dx).clamp(0, width - 1);
+            final ny = (y + dy).clamp(0, height - 1);
+            final pixel = image.getPixel(nx, ny);
+            final luminance = img.getLuminance(pixel);
+            sum += (luminance * 255).toInt();
+            count++;
+          }
+        }
+
+        final mean = sum / count;
+        final threshold = mean - c;
+
+        // Get current pixel value
+        final pixel = image.getPixel(x, y);
+        final luminance = img.getLuminance(pixel);
+        final value = (luminance * 255).toInt();
+
+        // Binarize
+        final newValue = value > threshold ? 255 : 0;
+        output.setPixel(x, y, img.ColorRgb8(newValue, newValue, newValue));
+      }
+    }
+
+    return output;
+  }
+
+  /// Reduce noise in the image using median filter
+  /// 
+  /// Removes salt-and-pepper noise that can interfere with OCR
+  img.Image _reduceNoise(img.Image image) {
+    final width = image.width;
+    final height = image.height;
+    final output = img.Image(width: width, height: height);
+
+    // Simple 3x3 median filter
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        final values = <int>[];
+
+        for (int dy = -1; dy <= 1; dy++) {
+          for (int dx = -1; dx <= 1; dx++) {
+            final nx = (x + dx).clamp(0, width - 1);
+            final ny = (y + dy).clamp(0, height - 1);
+            final pixel = image.getPixel(nx, ny);
+            final luminance = img.getLuminance(pixel);
+            values.add((luminance * 255).toInt());
+          }
+        }
+
+        values.sort();
+        final median = values[values.length ~/ 2];
+        output.setPixel(x, y, img.ColorRgb8(median, median, median));
+      }
+    }
+
+    return output;
+  }
+
+  /// Preprocess image specifically for handwriting recognition
+  /// 
+  /// Applies all handwriting-specific enhancements:
+  /// - Line removal
+  /// - High contrast enhancement
+  /// - Adaptive thresholding
+  /// - Noise reduction
+  /// - Sharpening
+  Future<Uint8List> preprocessForHandwriting(String imagePath) async {
+    return await preprocessImage(
+      imagePath,
+      enhanceForHandwriting: true,
+      contrast: 1.5,
+      brightness: 0.05,
+    );
+  }
+
+  /// Preprocess image bytes specifically for handwriting recognition
+  Future<Uint8List> preprocessBytesForHandwriting(Uint8List imageBytes) async {
+    return await preprocessImageBytes(
+      imageBytes,
+      enhanceForHandwriting: true,
+      contrast: 1.5,
+      brightness: 0.05,
+    );
   }
 }
 

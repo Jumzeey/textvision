@@ -45,12 +45,12 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<!-- Camera permission for scanning exam papers -->
+	<!-- Camera permission for scanning documents -->
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to your camera to scan exam papers and extract text.</string>
+	<string>This app needs access to your camera to scan documents and extract text.</string>
 	<!-- Photo library permission for selecting images -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs access to your photo library to select exam paper images.</string>
+	<string>This app needs access to your photo library to select document images.</string>
 	<!-- Microphone permission (optional, for future voice commands) -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app may need microphone access for voice commands in the future.</string>

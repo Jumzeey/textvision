@@ -16,13 +16,16 @@ class OCRService {
   /// Create an OCR service instance
   ///
   /// [script] - The text recognition script to use
-  ///   - TextRecognitionScript.latin: For printed Latin text (English, Spanish, etc.)
+  ///   - TextRecognitionScript.latin: For printed and handwritten Latin text
+  ///     (English, Spanish, etc.) - automatically detects handwriting
   ///   - TextRecognitionScript.chinese: For Chinese text
   ///   - TextRecognitionScript.devanagari: For Devanagari script
   ///   - TextRecognitionScript.japanese: For Japanese text
   ///   - TextRecognitionScript.korean: For Korean text
   ///
-  /// Default is Latin script for English and most European languages
+  /// Default is Latin script for English and most European languages.
+  /// The Latin script recognizer supports both printed and handwritten text
+  /// automatically - no special configuration needed for handwriting mode.
   OCRService({TextRecognitionScript script = TextRecognitionScript.latin})
     : _textRecognizer = TextRecognizer(script: script);
 

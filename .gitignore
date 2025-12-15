@@ -46,3 +46,7 @@ app.*.map.json
 
 # Environment variables (contains API keys)
 .env
+
+# Large TTS model files
+lib/vits-ljs/
+*.onnx
