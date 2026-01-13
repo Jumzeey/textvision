@@ -65,7 +65,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     try {
       // Check and request camera permission first
       final hasPermission = await _permissionService.checkCameraPermission();
-
+      
       if (!hasPermission) {
         // Request camera permission
         final permissionResult = await _permissionService
@@ -131,8 +131,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
           // Only show error if it's a critical service (camera), not TTS
           if (e.toString().contains('camera') ||
               e.toString().contains('permission')) {
-            _errorMessage =
-                'Failed to initialize services: $e\n\n${e.toString()}';
+          _errorMessage =
+              'Failed to initialize services: $e\n\n${e.toString()}';
           } else {
             // Non-critical error (like TTS) - just log it
             debugPrint('Non-critical initialization error: $e');
@@ -185,7 +185,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
           _currentStatus =
               'Camera ready. Position the document in the frame. Tap anywhere on the screen to capture.';
         });
-
+        
         // Test TTS immediately
         debugPrint('Testing TTS service...');
         try {
@@ -197,7 +197,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         } catch (e) {
           debugPrint('TTS test failed: $e');
         }
-
+        
         // Start monitoring with FULL instructions on app launch
         _startAlignmentMonitoring(fullInstructions: true);
       }
@@ -339,7 +339,7 @@ Swipe down to hear these instructions again.
 
       // Process immediately - no delay
       await _processImagesAndDetectQuestions();
-
+      
       // Resume monitoring when done
       if (mounted && _isInitialized) {
         _startAlignmentMonitoring();
@@ -388,80 +388,64 @@ Swipe down to hear these instructions again.
       final imageFile = _capturedImageFiles.first;
       String readableText = '';
 
-      // Check for internet - use Gemini if available
-      final hasInternet = await GeminiVisionService.isAvailable();
+      // ALWAYS try Gemini first (more reliable than pre-checking)
+      // If it fails, fall back to ML Kit automatically
+      debugPrint('🚀 Attempting Gemini Vision API first...');
 
-      if (hasInternet) {
-        // ONLINE: Use Gemini Vision for best results
-        debugPrint('Using Gemini Vision (online)');
+      // SPEAK: Let user know we're analyzing
+      await _ttsService.speak('Analyzing image.', pauseAtPunctuation: false);
 
-        // SPEAK: Let user know we're analyzing
-        await _ttsService.speak('Analyzing image.', pauseAtPunctuation: false);
-
-        // Set up progress callback to update UI
-        GeminiVisionService.onProgress = (status) {
+      // Set up progress callback to update UI
+      GeminiVisionService.onProgress = (status) {
           if (mounted) {
             setState(() {
-              _currentStatus = status;
-            });
-          }
-        };
-
-        try {
-          readableText = await _geminiService.processImage(
-            File(imageFile.path),
-          );
-          debugPrint('Gemini extracted: ${readableText.length} chars');
-
-          // Update status - text extracted, now generating audio
-          if (mounted) {
-            setState(() {
-              _currentStatus = 'Text extracted. Generating audio...';
-            });
-          }
-
-          // SPEAK: Let user know text was found
-          await _ttsService.speak(
-            'Text found. Preparing to read.',
-            pauseAtPunctuation: false,
-          );
-        } catch (e) {
-          debugPrint('Gemini failed, falling back to ML Kit: $e');
-          if (mounted) {
-            setState(() {
-              _currentStatus = 'Using offline mode...';
-            });
-          }
-          // Fall back to ML Kit
-          readableText = await _processWithMLKit(imageFile);
-        } finally {
-          GeminiVisionService.onProgress = null;
-        }
-      } else {
-        // OFFLINE: Use ML Kit OCR
-        debugPrint('Using ML Kit (offline)');
-
-        // SPEAK: Let user know we're processing offline
-        await _ttsService.speak(
-          'Processing offline.',
-          pauseAtPunctuation: false,
-        );
-
-        if (mounted) {
-          setState(() {
-            _currentStatus = 'Processing offline...';
+            _currentStatus = status;
           });
         }
-        readableText = await _processWithMLKit(imageFile);
+      };
 
-        if (readableText.isNotEmpty) {
-          await _ttsService.speak(
-            'Text found. Preparing to read.',
-            pauseAtPunctuation: false,
-          );
+      try {
+        readableText = await _geminiService.processImage(
+          File(imageFile.path),
+        );
+        debugPrint('✅ Gemini SUCCESS: extracted ${readableText.length} chars');
+
+        // Update status - text extracted, now generating audio
+        if (mounted) {
+          setState(() {
+            _currentStatus = 'Text extracted. Generating audio...';
+          });
         }
+
+        // SPEAK: Let user know text was found
+        await _ttsService.speak(
+          'Text found. Preparing to read.',
+          pauseAtPunctuation: false,
+        );
+        } catch (e) {
+        // Gemini failed - fall back to ML Kit
+        debugPrint('❌ Gemini FAILED: $e');
+        debugPrint('🔄 Falling back to ML Kit (offline)...');
+        
+        if (mounted) {
+          setState(() {
+            _currentStatus = 'Using offline mode...';
+          });
+        }
+        
+        // SPEAK: Let user know we're falling back
+        await _ttsService.speak(
+          'Switching to offline mode.',
+          pauseAtPunctuation: false,
+        );
+        
+        // Fall back to ML Kit
+        readableText = await _processWithMLKit(imageFile);
+      } finally {
+        GeminiVisionService.onProgress = null;
       }
 
+      // Process the extracted text
       if (readableText.trim().isEmpty) {
         if (mounted) {
           setState(() {
@@ -488,10 +472,10 @@ Swipe down to hear these instructions again.
           _currentStatus = 'Error. Try again.';
         });
       }
-      await _ttsService.speak(
+          await _ttsService.speak(
         'Error reading document. Please try again.',
-        pauseAtPunctuation: false,
-      );
+            pauseAtPunctuation: false,
+          );
     }
   }
 
@@ -516,7 +500,7 @@ Swipe down to hear these instructions again.
         if (retryRecognized.blocks.isNotEmpty) {
           return _blindReaderService.extractTextForReading(retryRecognized);
         }
-      } catch (e) {
+        } catch (e) {
         debugPrint('Preprocessing retry failed: $e');
       }
       return '';
@@ -591,7 +575,7 @@ Swipe down to hear these instructions again.
       }
     } catch (e) {
       debugPrint('TTS error: $e');
-      await _ttsService.speak(
+        await _ttsService.speak(
         'Error reading. Please try again.',
         pauseAtPunctuation: false,
       );
@@ -693,8 +677,8 @@ Swipe down to hear these instructions again.
     await _ttsService.stop();
     HapticFeedback.heavyImpact();
 
-    if (mounted) {
-      setState(() {
+      if (mounted) {
+        setState(() {
         _currentStatus = 'Stopped. Double-tap to repeat. Long-press to scan.';
       });
     }
@@ -1043,8 +1027,8 @@ Swipe down to hear these instructions again.
       canPop: true,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) {
-          // Stop reading and reset before navigating back
-          await _stopAndReset();
+        // Stop reading and reset before navigating back
+        await _stopAndReset();
         }
       },
       child: Scaffold(
@@ -1089,7 +1073,7 @@ Swipe down to hear these instructions again.
     // GestureDetector wraps EVERYTHING so taps work anywhere on screen
     return GestureDetector(
       // SINGLE TAP: Capture (if not reading) or Pause/Resume (if reading)
-      onTap: () {
+            onTap: () {
         debugPrint('TAP detected! isReading=$_isReading, isPaused=$_isPaused');
         if (_isReading || _isPaused) {
           _togglePauseResume();
@@ -1112,11 +1096,11 @@ Swipe down to hear these instructions again.
         if (_isReading) {
           _stopReading();
         }
-        if (!_isCapturingImages && !_isProcessing) {
+              if (!_isCapturingImages && !_isProcessing) {
           HapticFeedback.heavyImpact();
-          _captureTwoImages();
-        }
-      },
+                _captureTwoImages();
+              }
+            },
       // ALL SWIPES: Combined handler for left/right/down
       onPanEnd: (details) {
         final velocity = details.velocity.pixelsPerSecond;
@@ -1153,30 +1137,30 @@ Swipe down to hear these instructions again.
             ),
           ),
 
-          // Status and instructions at the top
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _currentStatus,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
+        // Status and instructions at the top
+        Positioned(
+          top: 16,
+          left: 16,
+          right: 16,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _currentStatus,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(height: 4),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
                   Text(
                     _isReading
                         ? 'Tap: pause. Double-tap: stop. Swipe: rewind/skip.'
@@ -1188,10 +1172,10 @@ Swipe down to hear these instructions again.
                     style: const TextStyle(color: Colors.white70, fontSize: 12),
                     textAlign: TextAlign.center,
                   ),
-                ],
-              ),
+              ],
             ),
           ),
+        ),
         ],
       ),
     );

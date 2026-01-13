@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 
@@ -18,8 +19,25 @@ import 'package:image/image.dart' as img;
 /// Never hardcode in release builds.
 class GeminiVisionService {
   // API Configuration
-  // TODO: Move to secure storage for production
-  static const String _apiKey = 'AIzaSyBPb2vg43jpFjBRe_ISbhnHJw1l5rMlz0U';
+  // API key is loaded from environment variables (CI/CD) or .env file (local)
+  static String get _apiKey {
+    // First try environment variable (for CI/CD like Codemagic)
+    final envKey = Platform.environment['GEMINI_API_KEY'];
+    if (envKey != null && envKey.isNotEmpty) {
+      return envKey;
+    }
+
+    // Fall back to .env file (for local development)
+    final dotenvKey = dotenv.env['GEMINI_API_KEY'];
+    if (dotenvKey != null && dotenvKey.isNotEmpty) {
+      return dotenvKey;
+    }
+
+    throw Exception(
+      'GEMINI_API_KEY not found. Set it as an environment variable (CI/CD) or in .env file (local).',
+    );
+  }
+
   static const String _model = 'gemini-2.0-flash'; // Latest fast model
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
@@ -53,18 +71,25 @@ The output must be comfortable and easy to understand when read aloud slowly.
   /// Returns extracted text optimized for TTS
   Future<String> processImage(File imageFile) async {
     try {
+      debugPrint('📸 Gemini: Starting image processing...');
+
       // Step 1: Prepare image (resize, compress)
       final preparedImage = await _prepareImage(imageFile);
+      debugPrint('📸 Gemini: Image prepared (${preparedImage.length} bytes)');
 
       // Step 2: Convert to base64
       final base64Image = base64Encode(preparedImage);
+      debugPrint('📸 Gemini: Image encoded to base64');
 
       // Step 3: Call Gemini API
+      debugPrint('📸 Gemini: Calling API...');
       final response = await _callGeminiApi(base64Image);
+      debugPrint('📸 Gemini: API call successful');
 
       return response;
-    } catch (e) {
-      debugPrint('Gemini Vision error: $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Gemini Vision error: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -129,7 +154,9 @@ The output must be comfortable and easy to understand when read aloud slowly.
       },
     };
 
-    debugPrint('Calling Gemini API...');
+    debugPrint('📡 Gemini: Calling API...');
+    debugPrint('📡 Gemini: Model: $_model');
+    debugPrint('📡 Gemini: URL: $url');
     onProgress?.call('Reading text from image...');
 
     final response = await http
@@ -145,11 +172,28 @@ The output must be comfortable and easy to understand when read aloud slowly.
           },
         );
 
+    debugPrint('📡 Gemini: Response received - Status: ${response.statusCode}');
     onProgress?.call('Processing response...');
 
     if (response.statusCode != 200) {
-      debugPrint('Gemini API error: ${response.statusCode}');
-      debugPrint('Response: ${response.body}');
+      debugPrint('❌ Gemini API error: ${response.statusCode}');
+      debugPrint('❌ Response body: ${response.body}');
+
+      // Check for specific error types
+      if (response.statusCode == 403) {
+        throw Exception(
+          'Gemini API: Billing not enabled or API key invalid. Please check your Google Cloud billing.',
+        );
+      } else if (response.statusCode == 429) {
+        throw Exception(
+          'Gemini API: Rate limit exceeded. Please try again later.',
+        );
+      } else if (response.statusCode == 404) {
+        throw Exception(
+          'Gemini API: Model not found. Please check the model name.',
+        );
+      }
+
       throw Exception('Gemini API error: ${response.statusCode}');
     }
 
@@ -172,9 +216,13 @@ The output must be comfortable and easy to understand when read aloud slowly.
     try {
       final result = await InternetAddress.lookup(
         'generativelanguage.googleapis.com',
-      ).timeout(const Duration(seconds: 3));
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      ).timeout(const Duration(seconds: 5));
+      final hasConnection =
+          result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      debugPrint('🌐 Internet check: $hasConnection');
+      return hasConnection;
     } catch (e) {
+      debugPrint('🌐 Internet check failed: $e');
       return false;
     }
   }
