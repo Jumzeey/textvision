@@ -19,28 +19,65 @@ import 'package:image/image.dart' as img;
 /// Never hardcode in release builds.
 class GeminiVisionService {
   // API Configuration
-  // API key is loaded from environment variables (CI/CD) or .env file (local)
+  // API key is loaded from --dart-define (CI/CD) or .env file (local dev)
   static String get _apiKey {
-    // First try environment variable (for CI/CD like Codemagic)
-    final envKey = Platform.environment['GEMINI_API_KEY'];
-    if (envKey != null && envKey.isNotEmpty) {
-      return envKey;
+    // First try --dart-define (for CI/CD like Codemagic)
+    // This is the recommended, production-safe way to pass secrets
+    const dartDefineKey = String.fromEnvironment('GEMINI_API_KEY');
+    if (dartDefineKey.isNotEmpty) {
+      if (kDebugMode) {
+        debugPrint('GeminiVisionService: Using API key from --dart-define');
+      }
+      return dartDefineKey;
     }
 
     // Fall back to .env file (for local development)
     final dotenvKey = dotenv.env['GEMINI_API_KEY'];
     if (dotenvKey != null && dotenvKey.isNotEmpty) {
+      if (kDebugMode) {
+        debugPrint('GeminiVisionService: Using API key from .env file');
+      }
       return dotenvKey;
     }
 
+    // Debug: Log what we checked
+    if (kDebugMode) {
+      debugPrint('GeminiVisionService: API key not found!');
+      debugPrint(
+        '  - String.fromEnvironment("GEMINI_API_KEY"): ${dartDefineKey.isEmpty ? "empty" : "found"}',
+      );
+      debugPrint(
+        '  - dotenv.env["GEMINI_API_KEY"]: ${dotenvKey != null ? "exists but empty" : "null"}',
+      );
+    }
+
     throw Exception(
-      'GEMINI_API_KEY not found. Set it as an environment variable (CI/CD) or in .env file (local).',
+      'GEMINI_API_KEY not found. '
+      'For CI/CD: Pass --dart-define=GEMINI_API_KEY=your_key_here in your build command. '
+      'For local dev: Create a .env file with GEMINI_API_KEY=your_key_here',
     );
   }
 
   static const String _model = 'gemini-2.0-flash'; // Latest fast model
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
+
+  /// Verify API key is accessible (for debugging)
+  /// Returns true if API key is found, false otherwise
+  static bool verifyApiKey() {
+    try {
+      final key = _apiKey;
+      if (kDebugMode) {
+        debugPrint('✅ Gemini API key verified (length: ${key.length})');
+      }
+      return key.isNotEmpty;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Gemini API key verification failed: $e');
+      }
+      return false;
+    }
+  }
 
   /// The accessibility-optimized prompt for blind users
   static const String _accessibilityPrompt = '''
