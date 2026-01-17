@@ -49,9 +49,17 @@ A Flutter mobile application that assists blind users by scanning documents and 
 
 - Flutter SDK 3.9.0 or higher
 - Dart 3.0.0 or higher
-- Android SDK 21+ (Android 5.0+)
+- **Android SDK 19+ (Android 4.4 KitKat+)** - Optimized for maximum compatibility
+  - ⚠️ **Note**: Some features may have limited functionality on Android 4.4-5.0
+  - ✅ **Recommended**: Android 5.0+ (Lollipop) for best experience
 - iOS 12.0+
 - Physical device with camera (camera not available on emulators)
+
+### Android Compatibility Notes
+
+- **Android 4.4 (KitKat)**: Basic functionality supported, but some modern features may be limited
+- **Android 5.0+ (Lollipop)**: Full feature support recommended
+- **Permissions**: On Android 4.4, permissions are granted at install time (no runtime permission dialogs)
 
 ## Installation
 
@@ -176,6 +184,11 @@ All core features work offline:
 3. **Confidence Scores**
    - Google ML Kit may not always provide confidence scores
    - Current implementation includes placeholder confidence estimation
+
+4. **Android 4.4 Compatibility**
+   - Some features may have limited functionality on Android 4.4
+   - Permissions are granted at install time (no runtime dialogs)
+   - See [ANDROID_COMPATIBILITY.md](ANDROID_COMPATIBILITY.md) for details
 
 ## Testing
 

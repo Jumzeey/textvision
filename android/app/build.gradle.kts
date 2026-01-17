@@ -11,12 +11,14 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        // Java 8 for Android 4.4+ compatibility (Java 11 requires API 26+)
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        // Java 8 target for Android 4.4+ compatibility
+        jvmTarget = "1.8"
     }
 
     defaultConfig {
@@ -24,7 +26,9 @@ android {
         applicationId = "com.example.textvision"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Set to API 19 (Android 4.4 KitKat) for maximum compatibility
+        // NOTE: Some dependencies may still require API 21+. Test thoroughly.
+        minSdk = 19
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
