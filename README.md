@@ -1,228 +1,279 @@
-# TextVision - Document Reader for Blind Users
+# TextVision — Document reader for blind users
 
-A Flutter mobile application that assists blind users by scanning documents and papers and reading both printed and handwritten text aloud using on-device OCR and text-to-speech.
+**TextVision** is a cross-platform **Flutter** application for **blind and low-vision** users. It uses the device **camera** to capture printed (and some handwritten) material, **extracts text** through a **hybrid** recognition stack, and **reads the result aloud** using the phone’s built-in voices—designed with **accessibility**, **haptics**, and **screen-reader** use in mind.
 
-## Features
+It is especially relevant in **assessment contexts**: many **visually impaired students** still depend on a **human reader** sitting beside them for the whole exam to **read each question aloud**. TextVision aims to **reduce that dependency** by letting the **device** read the paper on demand, while schools and exam boards remain responsible for **official accommodations** and rules about technology in the hall.
 
-### ✅ Core Features
+---
 
-1. **Camera Scanning**
-   - Live camera preview with scanning guide
-   - Support for both printed and handwritten text
-   - High-resolution image capture
-   - Haptic feedback for interactions
+## Contents
 
-2. **OCR (Optical Character Recognition)**
-   - On-device text recognition using Google ML Kit
-   - Works completely offline
-   - Supports multiple languages (Latin, Chinese, Japanese, Korean, Devanagari)
-   - Image preprocessing for better accuracy
-   - Handwriting recognition with quality scoring
+- [Who it is for](#who-it-is-for)
+- [What the app does (at a glance)](#what-the-app-does-at-a-glance)
+- [How recognition works](#how-recognition-works)
+- [Features](#features-as-implemented)
+- [Privacy and security](#privacy-and-security)
+- [Requirements and prerequisites](#requirements-and-prerequisites)
+- [Installation and first run](#installation-and-first-run)
+- [Configuration (optional Gemini key)](#configuration-optional-gemini-key)
+- [Day-to-day usage](#day-to-day-usage)
+- [Permissions](#permissions)
+- [Architecture (logical layout)](#architecture-logical-layout)
+- [Main dependencies](#main-dependencies)
+- [Testing](#testing)
+- [Release builds](#release-builds)
+- [Troubleshooting](#troubleshooting)
+- [Known limitations](#known-limitations)
+- [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
-3. **Text-to-Speech**
-   - Read extracted text aloud
-   - Adjustable speech rate, pitch, and volume
-   - Play, pause, resume, and stop controls
-   - Language selection support
-   - Works offline
+---
 
-4. **Accessibility**
-   - Full screen reader support (VoiceOver/TalkBack)
-   - Semantic labels for all interactive elements
-   - Minimum touch target sizes (48x48dp)
-   - Haptic feedback patterns
-   - Text scaling support
-   - Screen reader announcements
+## Who it is for
 
-5. **Storage & History**
-   - Save transcripts to local storage
-   - Export transcripts as text files
-   - Scan history tracking
-   - Storage usage information
+- **Blind and low-vision** users who need **spoken access** to **paper documents**, forms, notices, or **exam papers**
+- Educators or assistive-tech teams evaluating a **camera-based OCR + TTS** pipeline on **students’ own phones**
+- Developers extending the same codebase
 
-6. **Confidence Scoring**
-   - Confidence scores for recognized text
-   - Visual indicators for confidence levels
-   - Warnings for low-confidence text
+---
 
-## Requirements
+## What the app does (at a glance)
 
-- Flutter SDK 3.9.0 or higher
-- Dart 3.0.0 or higher
-- **Android SDK 19+ (Android 4.4 KitKat+)** - Optimized for maximum compatibility
-  - ⚠️ **Note**: Some features may have limited functionality on Android 4.4-5.0
-  - ✅ **Recommended**: Android 5.0+ (Lollipop) for best experience
-- iOS 12.0+
-- Physical device with camera (camera not available on emulators)
+| Goal | Behaviour |
+|------|-----------|
+| Capture | Opens to a **live camera**; user takes **one photo** per capture action for a fast feedback loop |
+| Recognize | Tries **cloud vision (Gemini)** when configured; otherwise or on failure uses **offline Google ML Kit** |
+| Normalize | Offline path **sorts OCR lines by position** and cleans text so it sounds more natural when spoken |
+| Speak | Reads in **sentence-sized chunks** with **pause**, **resume**, and **sentence-style navigation** |
+| Accessible UI | Larger targets, semantics, guarded text scaling, haptics and status cues |
 
-### Android Compatibility Notes
+---
 
-- **Android 4.4 (KitKat)**: Basic functionality supported, but some modern features may be limited
-- **Android 5.0+ (Lollipop)**: Full feature support recommended
-- **Permissions**: On Android 4.4, permissions are granted at install time (no runtime permission dialogs)
+## How recognition works
 
-## Installation
+High-level pipeline:
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd textvision
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   flutter pub get
-   ```
-
-3. **Run the app:**
-   ```bash
-   flutter run
-   ```
-
-## Project Structure
-
-```
-lib/
-├── main.dart                          # App entry point
-├── models/
-│   └── ocr_result.dart               # OCR result model
-├── screens/
-│   ├── home_screen.dart              # Main home screen
-│   ├── camera_scan_screen.dart       # Camera scanning interface
-│   ├── ocr_processing_screen.dart   # OCR processing screen
-│   └── text_display_screen.dart     # Text display with TTS
-└── services/
-    ├── camera_service.dart           # Camera operations
-    ├── ocr_service.dart              # OCR for printed text
-    ├── handwriting_recognition_service.dart  # Handwriting OCR
-    ├── image_preprocessing_service.dart      # Image enhancement
-    ├── tts_service.dart              # Text-to-speech
-    ├── permission_service.dart       # Permission handling
-    ├── accessibility_service.dart    # Accessibility features
-    └── storage_service.dart          # Storage operations
+```mermaid
+flowchart LR
+  A[Camera photo] --> B{Gemini succeeds?}
+  B -->|Yes| C[Gemini Vision text]
+  B -->|No or error| D[ML Kit on-device OCR]
+  D --> E[Optional preprocessing retry]
+  E --> F[Reorder and clean lines for TTS]
+  C --> G[Sentence split and speech]
+  F --> G
 ```
 
-## Usage
+*(“Gemini succeeds” means a valid key and a successful cloud response.)*
 
-### Scanning Documents
+- **Gemini path:** Sends the image over the network; best for hard layouts or messy handwriting **when allowed and available**.  
+- **ML Kit path:** Runs **locally**; no cloud round-trip for OCR itself—strong for **privacy** and **offline** rooms.  
 
-1. **Open the app** - the camera scanner opens automatically
-2. **Grant camera permission** when prompted
-3. **Position the document** within the scanning guide frame
-4. **Tap the capture button** to take a photo
-5. **Wait for OCR processing** to complete
-6. **Review the extracted text** on the display screen
-7. **Tap "Read Aloud"** to hear the text spoken
-8. **Adjust speech settings** using the expandable settings panel
-9. **Save the transcript** for later reference
+The app announces a **fallback to offline mode** when the cloud step fails so the listener is never left guessing.
 
-### Text-to-Speech Controls
+---
 
-- **Read Aloud**: Start reading the extracted text
-- **Pause**: Pause the current speech
-- **Resume**: Resume paused speech
-- **Stop**: Stop reading completely
-- **Speech Settings**: Adjust rate, pitch, and volume
+## Features (as implemented)
 
-### Saving Transcripts
+### Camera and capture
 
-- Tap the **Save** button to save the current transcript
-- Transcripts are saved to local storage
-- Access saved transcripts from the app's storage directory
+- Live preview, single-tap capture, **haptic feedback** when the shutter fires  
+- **Alignment monitoring** and **spoken / on-screen status** so users know whether the framing is plausible  
+- **Orientation support** locked to sensible device rotations for scanning  
 
-## Technical Details
+### Text extraction (hybrid)
 
-### OCR Technology
+1. **Gemini Vision** — Preferred when **API credentials** exist and **network** is reachable.  
+2. **Google ML Kit** — Automatic **fallback**, always available after a failed Gemini attempt **or** whenever Gemini cannot start. Processing stays **on-device**.  
 
-- **Google ML Kit Text Recognition**: On-device OCR engine
-- **Image Preprocessing**: Grayscale conversion, contrast adjustment, sharpening
-- **Handwriting Support**: Specialized preprocessing for handwritten text
-- **Offline Processing**: All OCR processing happens on-device
+Post-OCR processing **merges lines** using geometry from the OCR engine so paragraphs read **top-to-bottom, left-to-right** instead of arbitrary block order.
 
-### Text-to-Speech
+### Text-to-speech
 
-- **flutter_tts**: Cross-platform TTS engine
-- **Offline Support**: Uses device's built-in TTS engine
-- **Customizable**: Adjustable rate, pitch, and volume
+- **`flutter_tts`** driving the OS **native TTS** engine (quality and voices depend on the device)  
+- **Sentence-at-a-time** playback with hooks for **pause / resume / forward-style navigation** on the primary screen  
+- **iOS audio session** tuned so narration can coexist with camera-related audio routing where Apple allows  
 
 ### Accessibility
 
-- **Screen Reader Support**: Full VoiceOver/TalkBack compatibility
-- **Semantic Labels**: All UI elements properly labeled
-- **Haptic Feedback**: Tactile feedback for interactions
-- **Touch Targets**: Minimum 48x48dp for easy interaction
+- **Semantics** suited to **VoiceOver / TalkBack**  
+- Elevated minimum **tap targets** in the Material theme  
+- **Text scaler clamp** so extreme system font scaling does not shred layout  
+- **Centralized accessibility helpers** (e.g., haptics and announcement-oriented patterns)  
+
+---
+
+## Privacy and security
+
+- **Offline path:** Camera frames used for OCR are handled by **on-device ML Kit**; recognition does not require transmitting the page to Google’s vision API for OCR *when ML Kit succeeds alone*. *(ML Kit libraries themselves are governed by Google’s terms—which you accept when integrating the SDK—so review those for institution compliance.)*
+- **Online path:** If **Gemini** is enabled, **image content is sent** to Google’s servers for that API call. Treat this as **sensitive** in exam scenarios: **inform participants**, comply with **data processing rules**, and prefer **exam-board-approved** setups.
+- **API keys:** Never commit **`GEMINI_API_KEY`** into version control. Prefer **`--dart-define`** or CI secrets for builds; `.env` is for **local convenience** only. For production, a **backend proxy** is the safest pattern—the app as shipped demonstrates direct API use for simplicity, not maximal enterprise hardening.
+
+---
+
+## Requirements and prerequisites
+
+**Runtime**
+
+- Target **Flutter SDK 3.9.0 or newer** and the **Dart SDK** bundled with that Flutter release  
+- **Android:** Aim for broad compatibility; permissions and behaviour differ across OS generations—**always validate on the exact devices students will use**  
+- **iOS 12 or later**  
+- **Physical handset with a camera** strongly recommended  
+
+**Development machine**
+
+- Flutter SDK correctly installed (**`flutter doctor` should be clean enough** to compile for your target platforms)  
+- **Android Studio** / Android SDK **or** **Xcode** (for respectively Android-only or iOS-only work; both for dual-platform builds)  
+
+---
+
+## Installation and first run
+
+```bash
+git clone <repository-url>
+cd textvision
+flutter pub get
+flutter run
+```
+
+- Use a **physical device** for realistic camera OCR tests.  
+- After changing **native plugins** (camera, OCR, TTS), do a **full rebuild** (`flutter clean` then rebuild)—see [Troubleshooting](#troubleshooting).  
+
+---
+
+## Configuration (optional Gemini key)
+
+To enable **online** extraction first:
+
+**Option A — local `.env`** (stay in the same directory you invoke Flutter from)
+
+Create **`GEMINI_API_KEY=YOUR_KEY_HERE`** on one line inside a file named **`.env`** at project root.
+
+Keys: [Google AI Studio](https://aistudio.google.com/app/apikey) or Google Cloud → APIs & Services → Credentials.
+
+**Option B — no file secret**
+
+```bash
+flutter run --dart-define=GEMINI_API_KEY=YOUR_KEY_HERE
+```
+
+Use analogous **`--dart-define`** flags for **`flutter build`**.
+
+If Gemini is missing or errors, behaviour **drops back to offline ML Kit** and the UI typically signals **offline mode**.
+
+---
+
+## Day-to-day usage
+
+1. **Open** TextVision → camera activates.  
+2. **Approve** camera access.  
+3. **Frame** the page; listen or feel for positioning hints.  
+4. **Tap capture** → short processing cue → extracted text reads aloud.  
+5. Use **speech controls** to **pause**, **resume**, or **step through sentences** as the UI exposes.  
+
+For dense papers, repeated **section-by-section** captures usually beat one ultra-wide blurry shot—users learn to treat each capture like asking a reader for “start from Question 8.”  
+
+---
 
 ## Permissions
 
-The app requires the following permissions:
+| Capability | Purpose |
+|------------|---------|
+| **Camera** | Required for scans |
+| **Storage / Photos** | May appear for reading or persisting intermediates depending on OS and plugin behaviour |
+| **Microphone** (declared) | Reserved for potential future speech features; core flow is **not** microphone-driven dictation |
 
-- **Camera**: For scanning documents
-- **Storage**: For saving transcripts (Android 12 and below)
-- **Photos**: For saving transcripts (Android 13+)
-- **Microphone**: Optional, for future voice commands
+---
 
-## Offline Support
+## Architecture (logical layout)
 
-All core features work offline:
+Rather than splitting into many unrelated screens, the shipped experience keeps **capture and playback** cohesive:
 
-- ✅ OCR processing (on-device)
-- ✅ Text-to-speech (device TTS engine)
-- ✅ Image preprocessing
-- ✅ Transcript storage
+- **Single primary screen:** camera UX, hybrid processing trigger, transcript playback affordances  
+- **Service-style modules:** camera wrapper, ML Kit OCR, optional Gemini HTTP client, image preprocessing fallback, blind-friendly text ordering, hybrid TTS, permission gate, accessibility utilities  
+- **Supplementary parsers** (questions / grouping) exist in source for experimentation but **are not wired** into the dominant user flow today  
 
-## Known Limitations
+Multi-platform scaffolding (Android / iOS / desktop / web folders) mirrors standard **Flutter templates**—mobile is the realistic target for OCR + flash photography.
 
-1. **Handwriting Recognition**
-   - Accuracy depends on handwriting clarity
-   - Works best with thick-lined paper
-   - May require multiple attempts for poor handwriting
+---
 
-2. **TTS Pause/Resume**
-   - Pause/resume may not be supported on all platforms
-   - Falls back to stop on unsupported platforms
+## Main dependencies
 
-3. **Confidence Scores**
-   - Google ML Kit may not always provide confidence scores
-   - Current implementation includes placeholder confidence estimation
+| Concern | Technology |
+|---------|------------|
+| Camera | **`camera`** |
+| OCR | **`google_mlkit_text_recognition`** |
+| Vision API | Gemini over **`http`**; optional **`flutter_dotenv`** for local keys |
+| Speech | **`flutter_tts`** |
+| Images | **`image`** |
+| Permissions | **`permission_handler`** |
 
-4. **Android 4.4 Compatibility**
-   - Some features may have limited functionality on Android 4.4
-   - Permissions are granted at install time (no runtime dialogs)
-   - See [ANDROID_COMPATIBILITY.md](ANDROID_COMPATIBILITY.md) for details
+Other declared packages (**`shared_preferences`**, **`path_provider`**, **`image_picker`**, etc.) anticipate future features—they are **not** critical to the minimalist camera → recognize → speak path.
+
+---
 
 ## Testing
 
-Run tests with:
 ```bash
 flutter test
 ```
 
-## Building for Release
+Widget and service checks validate selected logic; **end-to-end quality** still depends on **real hardware** scans under varied lighting.
 
-### Android
+---
+
+## Release builds
+
+**Android APK**
+
 ```bash
 flutter build apk --release
 ```
 
-### iOS
+**Apple device / store pipeline**
+
 ```bash
 flutter build ios --release
 ```
 
+Release signing, provisioning profiles, Play Console listings, and **App Privacy** questionnaires are outside this README—you must satisfy **store policies** separately, especially regarding **photos** and **optional cloud uploads**.
+
+---
+
+## Troubleshooting
+
+| Symptom | Things to try |
+|---------|----------------|
+| OCR always empty | Better light, sharper focus; move closer but keep full line in frame; retry after **`flutter clean` + reinstall** |
+| Gemini never succeeds | Confirm key via **`--dart-define`** or `.env`; check network/VPN/firewall |
+| Fallback works but wording order is odd | Complex columns or sideways text confuse any engine—rotate paper to portrait upright where possible |
+| No speech | Device volume/unmute; verify OS TTS not disabled in system settings |
+| Crash after plugin upgrade | **`flutter clean`**, **`flutter pub get`**, full rebuild—not hot reload |
+| iOS CocoaPods friction | Standard Flutter fix: reinstall pods for the Flutter iOS host workspace, reopen Xcode |
+
+---
+
+## Known limitations
+
+1. **Exams regulation:** Institutions define **whether phones and cloud APIs are allowed**. This software does not replace formal **exam access arrangements**.  
+2. **Diagrams, chemistry, handwritten scratch:** OCR and vision APIs read **symbols** inconsistently—not every STEM layout is faithfully spoken.  
+3. **Accent / voice packs:** Speech quality hinges on OS-installed voices.  
+4. **Temporal behaviour:** Pause/resume edge cases vary by manufacturer Android builds.  
+5. **Developer trap:** Speech can be **disabled globally in debug** through a guarded hook in Dart startup code meant only when hunting native regressions—not for end users.  
+
+---
+
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Improvements welcome. Explain **motivation**, **risk**, **test plan** (device types, accessibility tools used), and any **exam-privacy implication** before large behavioural changes.
 
 ## License
 
-This project is licensed under the MIT License.
-
-## Support
-
-For issues, questions, or feature requests, please open an issue on the repository.
+This project is licensed under the **MIT License**.
 
 ## Acknowledgments
 
-- Google ML Kit for OCR capabilities
-- flutter_tts for text-to-speech functionality
-- Flutter team for the excellent framework
+- **Google ML Kit** for on-device OCR  
+- **`flutter_tts`** contributors  
+- **Flutter** and **Dart** communities  

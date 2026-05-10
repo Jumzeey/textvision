@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -72,9 +74,10 @@ class AccessibilityService {
     String text, {
     bool assertive = false,
   }) {
-    SemanticsService.announce(
+    SemanticsService.sendAnnouncement(
+      context.findRenderObject() as FlutterView,
       text,
-      assertive ? TextDirection.ltr : TextDirection.ltr,
+      (assertive ? TextDirection.ltr : TextDirection.ltr),
     );
   }
 
