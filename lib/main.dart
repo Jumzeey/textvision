@@ -30,8 +30,11 @@ Future<void> main() async {
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
-    // Silently ignore - .env file is optional
-    // Only used for future features that might need API keys
+    // .env is optional (can also use --dart-define), but log in debug
+    // so API key setup issues are easier to diagnose.
+    if (kDebugMode) {
+      debugPrint('dotenv load failed: $e');
+    }
   }
 
   // Set preferred orientations to support both portrait and landscape

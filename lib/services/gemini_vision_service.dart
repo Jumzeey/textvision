@@ -31,8 +31,14 @@ class GeminiVisionService {
       return dartDefineKey;
     }
 
-    // Fall back to .env file (for local development)
-    final dotenvKey = dotenv.env['GEMINI_API_KEY'];
+    // Fall back to .env file (for local development).
+    // Guard access in case dotenv failed to initialize.
+    String? dotenvKey;
+    try {
+      dotenvKey = dotenv.env['GEMINI_API_KEY'];
+    } catch (_) {
+      dotenvKey = null;
+    }
     if (dotenvKey != null && dotenvKey.isNotEmpty) {
       if (kDebugMode) {
         debugPrint('GeminiVisionService: Using API key from .env file');

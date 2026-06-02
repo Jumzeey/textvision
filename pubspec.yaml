@@ -90,12 +90,12 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # Note: .env is NOT included here because:
-  # - For local dev: .env file is loaded from project root (not as asset)
-  # - For CI/CD: Environment variables are used directly (no .env needed)
-  # assets:
-  #   - images/example.png
+  # Assets
+  #
+  # Include .env as an asset so flutter_dotenv can load it at runtime
+  # on device builds. Keep .env out of source control.
+  assets:
+    - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
