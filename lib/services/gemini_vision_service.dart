@@ -64,7 +64,7 @@ class GeminiVisionService {
     );
   }
 
-  static const String _model = 'gemini-2.0-flash'; // Latest fast model
+  static const String _model = 'gemini-2.5-flash'; // Current fast model
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
 
